@@ -1,4 +1,4 @@
-# Build app
+# APP BUILDER
 FROM python:3.14-alpine3.24 AS builder
 
 WORKDIR /app
@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 
 COPY . .
 
-# Deploy app
+# APP
 FROM python:3.14-alpine3.24
 
 WORKDIR /app
@@ -31,4 +31,4 @@ USER appuser
 
 EXPOSE 8005
 
-CMD [ "python3", "app.py" ]
+CMD ["gunicorn", "--bind", "0.0.0.0:8005", "app:app"]
