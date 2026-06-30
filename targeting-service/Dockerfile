@@ -7,7 +7,7 @@ RUN apk add --no-cache ca-certificates && \
     addgroup -g 10001 -S appgroup && \
     adduser -u 10001 -S -G appgroup appuser
 
-COPY requirements.txt
+COPY requirements.txt .
 
 RUN pip install --no-cache-dir --user -r requirements.txt
 
