@@ -1,34 +1,25 @@
-# APP BUILDER
 FROM python:3.14-alpine3.24 AS builder
 
 WORKDIR /app
-
-RUN apk add --no-cache ca-certificates && \
-    addgroup -g 10001 -S appgroup && \
-    adduser -u 10001 -S -G appgroup appuser
+RUN apk add --no-cache ca-certificates
 
 COPY requirements.txt .
-
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-COPY . .
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir gunicorn>=23.0.0 && \
+    pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.14-alpine3.24
 
-# APP
 WORKDIR /app
+RUN addgroup -g 10001 -S appgroup && \
+    adduser -u 10001 -S -G appgroup appuser
 
-COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /etc/group /etc/group
-COPY --from=builder /root/.local /home/appuser/.local
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
 COPY --chown=appuser:appgroup . .
-
-ENV PATH=/home/appuser/.local/bin:$PATH
-ENV PYTHONUSERBASE=/home/appuser/.local
-
 USER appuser
 
 EXPOSE 8003
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8003", "app:app"]
+CMD ["python", "app.py"]

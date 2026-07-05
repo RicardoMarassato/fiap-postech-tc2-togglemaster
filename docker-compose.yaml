@@ -142,6 +142,8 @@ services:
     image: togglemaster-evaluation-service:local
     build:
       context: ./evaluation-service
+    env_file:
+      - .env
     environment:
       PORT: "8004"
       REDIS_URL: redis://redis:6379
@@ -164,6 +166,8 @@ services:
     image: togglemaster-analytics-service:local
     build:
       context: ./analytics-service
+    env_file:
+      - .env
     environment:
       PORT: "8005"
       AWS_REGION: ${AWS_REGION:-us-east-1}
