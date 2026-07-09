@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: evaluation-config
+  namespace: togglemaster
+data:
+  PORT: "8004"
+  REDIS_URL: "redis://master.togglemaster-cache.dbbotj.use1.cache.amazonaws.com:6379"
+  FLAG_SERVICE_URL: "http://flag-service:8002"
+  TARGETING_SERVICE_URL: "http://targeting-service:8003"
+  AWS_REGION: "us-east-1"
+  AWS_SQS_URL: "https://sqs.us-east-1.amazonaws.com/090985516911/evaluation-events-queue"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: evaluation-secret
+  namespace: togglemaster
+type: Opaque
+stringData:
+  SERVICE_API_KEY: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evaluation-service
+  namespace: togglemaster
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: evaluation-service
+  template:
+    metadata:
+      labels:
+        app: evaluation-service
+    spec:
+      containers:
+      - name: evaluation-service
+        image: 090985516911.dkr.ecr.us-east-1.amazonaws.com/togglemaster/evaluation-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8004
+        env:
+        - name: PORT
+          value: "8004"
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef: { name: evaluation-config, key: REDIS_URL }
+        - name: FLAG_SERVICE_URL
+          valueFrom:
+            configMapKeyRef: { name: evaluation-config, key: FLAG_SERVICE_URL }
+        - name: TARGETING_SERVICE_URL
+          valueFrom:
+            configMapKeyRef: { name: evaluation-config, key: TARGETING_SERVICE_URL }
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef: { name: evaluation-config, key: AWS_REGION }
+        - name: AWS_SQS_URL
+          valueFrom:
+            configMapKeyRef: { name: evaluation-config, key: AWS_SQS_URL }
+        - name: SERVICE_API_KEY
+          valueFrom:
+            secretKeyRef: { name: evaluation-secret, key: SERVICE_API_KEY }
+        resources:
+          limits: { cpu: "500m", memory: "256Mi" }
+          requests: { cpu: "100m", memory: "128Mi" }
+        livenessProbe:
+          httpGet: { path: /health, port: 8004 }
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet: { path: /health, port: 8004 }
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evaluation-service
+  namespace: togglemaster
+spec:
+  type: ClusterIP
+  selector:
+    app: evaluation-service
+  ports:
+  - port: 8004
+    targetPort: 8004
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: evaluation-service-hpa
+  namespace: togglemaster
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: evaluation-service }
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }

@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flag-config
+  namespace: togglemaster
+data:
+  PORT: "8002"
+  AUTH_SERVICE_URL: "http://auth-service:8001"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flag-secret
+  namespace: togglemaster
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://postgres:postgres@flag-db.ciyhc63gtdsw.us-east-1.rds.amazonaws.com:5432/flags_db?sslmode=require"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flag-service
+  namespace: togglemaster
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flag-service
+  template:
+    metadata:
+      labels:
+        app: flag-service
+    spec:
+      containers:
+      - name: flag-service
+        image: 090985516911.dkr.ecr.us-east-1.amazonaws.com/togglemaster/flag-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8002
+        env:
+        - name: PORT
+          value: "8002"
+        - name: AUTH_SERVICE_URL
+          valueFrom:
+            configMapKeyRef: { name: flag-config, key: AUTH_SERVICE_URL }
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef: { name: flag-secret, key: DATABASE_URL }
+        resources:
+          limits: { cpu: "500m", memory: "256Mi" }
+          requests: { cpu: "100m", memory: "128Mi" }
+        livenessProbe:
+          httpGet: { path: /health, port: 8002 }
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet: { path: /health, port: 8002 }
+          initialDelaySeconds: 10
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flag-service
+  namespace: togglemaster
+spec:
+  type: ClusterIP
+  selector:
+    app: flag-service
+  ports:
+  - port: 8002
+    targetPort: 8002
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: flag-service-hpa
+  namespace: togglemaster
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: flag-service }
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }

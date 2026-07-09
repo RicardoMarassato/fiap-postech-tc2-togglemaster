@@ -1,4 +1,7 @@
-""" Simple script to clone all application repositories using GitHub CLI"""
+""" 
+    Simple script to clone all application repositories using GitHub CLI
+    Made by Ricardo Marassato
+"""
 
 import subprocess
 import sys
